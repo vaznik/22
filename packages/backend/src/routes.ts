@@ -222,10 +222,11 @@ export async function registerRoutes(app: FastifyInstance) {
       });
       await tx.ledgerEntry.create({
         data: {
+          userId: account.userId,
           accountId: account.id,
-          type: 'DEPOSIT',
+          type: "DEPOSIT",
           amountNano,
-          refType: 'TON',
+          refType: "TON",
           refId: providerRef,
         },
       });

@@ -1,18 +1,24 @@
 {
   "name": "@tgcasino/shared",
   "version": "0.1.0",
+  "private": true,
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "tsc -p tsconfig.json -w",
-    "lint": "node -e \"console.log('lint: use your favorite linter')\"",
-    "format": "prettier -w ."
+    "dev": "tsc -w -p tsconfig.json"
   },
   "dependencies": {
-    "zod": "^3.23.8"
+    "zod": "^3.24.1"
   },
   "devDependencies": {
-    "typescript": "^5.5.4"
+    "@types/node": "^20.19.33"
   }
 }

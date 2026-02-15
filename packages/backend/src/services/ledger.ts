@@ -1,20 +1,23 @@
-import { prisma } from '../prisma';
-import { Currency } from '@prisma/client';
+import { prisma } from "../prisma";
+import { Currency, LedgerEntryType } from "@prisma/client";
 
 export function toNano(currency: Currency, amount: string): bigint {
   // XTR and TON both treated as 1e9 nano units here for ledger uniformity.
   // Stars are integer in Stars UI, but we store nano for consistency.
-  const [whole, frac = ''] = amount.split('.');
-  const fracPadded = (frac + '000000000').slice(0, 9);
-  return BigInt(whole) * BigInt(1_000_000_000) + BigInt(fracPadded);
+  const [whole, frac = ""] = amount.split(".");
+  const fracPadded = (frac + "000000000").slice(0, 9);
+  return BigInt(whole || "0") * BigInt(1_000_000_000) + BigInt(fracPadded);
 }
 
 export function fromNano(amountNano: bigint): string {
-  const sign = amountNano < 0 ? '-' : '';
-  const x = amountNano < 0 ? -amountNano : amountNano;
-  const whole = x / BigInt(1_000_000_000);
-  const frac = (x % BigInt(1_000_000_000)).toString().padStart(9, '0').replace(/0+$/, '');
-  return sign + whole.toString() + (frac ? '.' + frac : '');
+  const sign = amountNano < 0n ? "-" : "";
+  const x = amountNano < 0n ? -amountNano : amountNano;
+  const whole = x / 1_000_000_000n;
+  const frac = (x % 1_000_000_000n)
+    .toString()
+    .padStart(9, "0")
+    .replace(/0+$/, "");
+  return sign + whole.toString() + (frac ? "." + frac : "");
 }
 
 export async function ensureAccount(userId: string, currency: Currency) {
@@ -28,14 +31,17 @@ export async function ensureAccount(userId: string, currency: Currency) {
 export async function addEntry(params: {
   userId: string;
   currency: Currency;
-  type: any;
+  type: LedgerEntryType;
   amountNano: bigint;
   refType: string;
   refId: string;
 }) {
   const account = await ensureAccount(params.userId, params.currency);
+
+  // ✅ IMPORTANT: LedgerEntry now requires userId (opposite relation to User.ledgerEntries)
   return prisma.ledgerEntry.create({
     data: {
+      userId: account.userId, // same as params.userId, but guaranteed consistent with account
       accountId: account.id,
       type: params.type,
       amountNano: params.amountNano,
@@ -46,11 +52,15 @@ export async function addEntry(params: {
 }
 
 export async function accountBalanceNano(userId: string, currency: Currency): Promise<bigint> {
-  const account = await prisma.account.findUnique({ where: { userId_currency: { userId, currency } } });
-  if (!account) return BigInt(0);
+  const account = await prisma.account.findUnique({
+    where: { userId_currency: { userId, currency } },
+  });
+  if (!account) return 0n;
+
   const agg = await prisma.ledgerEntry.aggregate({
     where: { accountId: account.id },
     _sum: { amountNano: true },
   });
-  return (agg._sum.amountNano ?? BigInt(0)) as any;
+
+  return (agg._sum.amountNano ?? 0n) as unknown as bigint;
 }

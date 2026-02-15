@@ -23,7 +23,7 @@ export async function referralAllowedForDevice(deviceId: string) {
   const count = await prisma.referral.count({
     where: {
       createdAt: { gte: sinceDay },
-      invitee: { devices: { some: { deviceId } } },
+      invitee: { deviceLinks: { some: { deviceId } } },
     },
   });
   if (count >= env.maxReferralsPerDevicePerDay) return false;
@@ -31,7 +31,7 @@ export async function referralAllowedForDevice(deviceId: string) {
   // 2) cooldown (per device)
   const sinceCooldown = new Date(Date.now() - env.referralCooldownSeconds * 1000);
   const last = await prisma.referral.findFirst({
-    where: { createdAt: { gte: sinceCooldown }, invitee: { devices: { some: { deviceId } } } },
+    where: { createdAt: { gte: sinceCooldown }, invitee: { deviceLinks: { some: { deviceId } } } },
     orderBy: { createdAt: 'desc' },
   });
   if (last) return false;
