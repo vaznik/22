@@ -51,31 +51,36 @@ enum PaymentProvider {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  tgUserId     BigInt   @unique
-  username     String?
-  firstName    String?
-  lastName     String?
-  photoUrl     String?
-  language     String   @default("en")
-  notifications Boolean @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String   @id @default(uuid())
+  tgUserId      BigInt   @unique
+  username      String?
+  firstName     String?
+  lastName      String?
+  photoUrl      String?
+  language      String   @default("en")
+  notifications Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  deviceLinks  DeviceLink[]
-  referralsAsInviter Referral[] @relation("InviterReferrals")
-  referralsAsInvitee Referral[] @relation("InviteeReferrals")
+  deviceLinks         DeviceLink[]
+  referralsAsInviter  Referral[] @relation("InviterReferrals")
+  referralsAsInvitee  Referral[] @relation("InviteeReferrals")
 
-  ledgerEntries LedgerEntry[]
-  roomPlayers   RoomPlayer[]
-  stakes        Stake[]
+  accounts            Account[]
+  paymentIntents      PaymentIntent[]
+
+  // ✅ fixed: opposite relation field exists in LedgerEntry
+  ledgerEntries       LedgerEntry[] @relation("UserLedgerEntries")
+
+  roomPlayers         RoomPlayer[]
+  stakes              Stake[]
 }
 
 model DeviceLink {
-  id        String   @id @default(uuid())
-  userId    String
-  deviceId  String
-  createdAt DateTime @default(now())
+  id         String   @id @default(uuid())
+  userId     String
+  deviceId   String
+  createdAt  DateTime @default(now())
   lastSeenAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id])
@@ -85,10 +90,10 @@ model DeviceLink {
 }
 
 model Referral {
-  id         String   @id @default(uuid())
-  inviterId  String
-  inviteeId  String
-  createdAt  DateTime @default(now())
+  id        String   @id @default(uuid())
+  inviterId String
+  inviteeId String
+  createdAt DateTime @default(now())
 
   inviter User @relation("InviterReferrals", fields: [inviterId], references: [id])
   invitee User @relation("InviteeReferrals", fields: [inviteeId], references: [id])
@@ -103,56 +108,62 @@ model Account {
   currency  Currency
   createdAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id])
+  user    User          @relation(fields: [userId], references: [id])
   entries LedgerEntry[]
 
   @@unique([userId, currency])
 }
 
 model LedgerEntry {
-  id          String   @id @default(uuid())
-  accountId   String
-  type        LedgerEntryType
-  amountNano  BigInt
-  refType     String
-  refId       String
-  createdAt   DateTime @default(now())
+  id         String         @id @default(uuid())
+
+  // ✅ fixed: add opposite relation to User.ledgerEntries
+  userId     String
+  user       User           @relation("UserLedgerEntries", fields: [userId], references: [id])
+
+  accountId  String
+  type       LedgerEntryType
+  amountNano BigInt
+  refType    String
+  refId      String
+  createdAt  DateTime       @default(now())
 
   account Account @relation(fields: [accountId], references: [id])
 
   @@index([refType, refId])
   @@index([accountId, createdAt])
+  @@index([userId, createdAt])
 }
 
 model Room {
-  id            String    @id @default(uuid())
-  kind          RoomKind
-  currency      Currency
-  game          GameKind
+  id              String     @id @default(uuid())
+  kind            RoomKind
+  currency        Currency
+  game            GameKind
   stakeAmountNano BigInt
-  maxPlayers    Int
-  status        RoomStatus @default(OPEN)
-  startsAt      DateTime?
-  startMode     String     @default("FILL")
-  cancelAt      DateTime?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  maxPlayers      Int
+  status          RoomStatus @default(OPEN)
+  startsAt        DateTime?
+  startMode       String     @default("FILL")
+  cancelAt        DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
   // Provably fair
-  serverSeedHash String
-  serverSeed     String? // revealed at settle
-  nonce          Int      @default(0)
+  serverSeedHash  String
+  serverSeed      String? // revealed at settle
+  nonce           Int      @default(0)
 
   players       RoomPlayer[]
   settlements   Settlement[]
 }
 
 model RoomPlayer {
-  id         String   @id @default(uuid())
-  roomId     String
-  userId     String
-  clientSeed String
-  joinedAt   DateTime @default(now())
+  id               String   @id @default(uuid())
+  roomId           String
+  userId           String
+  clientSeed       String
+  joinedAt         DateTime @default(now())
   betLockedEntryId String?
 
   room Room @relation(fields: [roomId], references: [id])
@@ -163,14 +174,14 @@ model RoomPlayer {
 }
 
 model Settlement {
-  id        String   @id @default(uuid())
-  roomId    String
-  outcomeJson Json
+  id               String   @id @default(uuid())
+  roomId           String
+  outcomeJson      Json
   revealClientSeed String
   revealServerSeed String
-  revealNonce Int
-  settledAt DateTime @default(now())
-  txProof   String?
+  revealNonce      Int
+  settledAt        DateTime @default(now())
+  txProof          String?
 
   room Room @relation(fields: [roomId], references: [id])
 
@@ -178,16 +189,16 @@ model Settlement {
 }
 
 model PaymentIntent {
-  id          String   @id @default(uuid())
-  userId      String
-  provider    PaymentProvider
-  currency    Currency
-  amountNano  BigInt
-  status      String   @default("PENDING") // PENDING|CONFIRMED|FAILED
-  idempotencyKey String @unique
-  providerRef String?  @unique
-  createdAt   DateTime @default(now())
-  confirmedAt DateTime?
+  id             String          @id @default(uuid())
+  userId         String
+  provider       PaymentProvider
+  currency       Currency
+  amountNano     BigInt
+  status         String          @default("PENDING") // PENDING|CONFIRMED|FAILED
+  idempotencyKey String          @unique
+  providerRef    String?         @unique
+  createdAt      DateTime        @default(now())
+  confirmedAt    DateTime?
 
   user User @relation(fields: [userId], references: [id])
 
@@ -195,12 +206,12 @@ model PaymentIntent {
 }
 
 model Stake {
-  id          String   @id @default(uuid())
-  userId      String
-  amountNano  BigInt
-  lockedAt    DateTime @default(now())
-  unlockAt    DateTime
-  status      String   @default("LOCKED") // LOCKED|UNLOCKED
+  id           String   @id @default(uuid())
+  userId       String
+  amountNano   BigInt
+  lockedAt     DateTime @default(now())
+  unlockAt     DateTime
+  status       String   @default("LOCKED") // LOCKED|UNLOCKED
   lastRewardAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id])
