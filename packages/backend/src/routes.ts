@@ -233,7 +233,6 @@ export async function registerRoutes(app: FastifyInstance) {
 
     return { ok: true, already: false, providerRef, confirmedVia: vr.confirmedVia };
   });
-  });
 
   // Staking
   app.get('/staking', async (req: any) => {
