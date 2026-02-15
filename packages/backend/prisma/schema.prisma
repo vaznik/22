@@ -1,0 +1,209 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Currency {
+  XTR
+  TON
+}
+
+enum GameKind {
+  ROULETTE
+  COINFLIP
+  JACKPOT
+  CRASH
+}
+
+enum RoomKind {
+  SYSTEM
+  USER
+}
+
+enum RoomStatus {
+  OPEN
+  LOCKED
+  RUNNING
+  SETTLED
+  CANCELLED
+  REFUNDED
+}
+
+enum LedgerEntryType {
+  DEPOSIT
+  WITHDRAW
+  BET_LOCK
+  BET_UNLOCK
+  PAYOUT
+  REFUND
+  STAKE_LOCK
+  STAKE_UNLOCK
+  STAKE_REWARD
+}
+
+enum PaymentProvider {
+  STARS
+  TON
+}
+
+model User {
+  id           String   @id @default(uuid())
+  tgUserId     BigInt   @unique
+  username     String?
+  firstName    String?
+  lastName     String?
+  photoUrl     String?
+  language     String   @default("en")
+  notifications Boolean @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  deviceLinks  DeviceLink[]
+  referralsAsInviter Referral[] @relation("InviterReferrals")
+  referralsAsInvitee Referral[] @relation("InviteeReferrals")
+
+  ledgerEntries LedgerEntry[]
+  roomPlayers   RoomPlayer[]
+  stakes        Stake[]
+}
+
+model DeviceLink {
+  id        String   @id @default(uuid())
+  userId    String
+  deviceId  String
+  createdAt DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([deviceId, userId])
+  @@index([deviceId])
+}
+
+model Referral {
+  id         String   @id @default(uuid())
+  inviterId  String
+  inviteeId  String
+  createdAt  DateTime @default(now())
+
+  inviter User @relation("InviterReferrals", fields: [inviterId], references: [id])
+  invitee User @relation("InviteeReferrals", fields: [inviteeId], references: [id])
+
+  @@unique([inviteeId])
+  @@index([inviterId, createdAt])
+}
+
+model Account {
+  id        String   @id @default(uuid())
+  userId    String
+  currency  Currency
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  entries LedgerEntry[]
+
+  @@unique([userId, currency])
+}
+
+model LedgerEntry {
+  id          String   @id @default(uuid())
+  accountId   String
+  type        LedgerEntryType
+  amountNano  BigInt
+  refType     String
+  refId       String
+  createdAt   DateTime @default(now())
+
+  account Account @relation(fields: [accountId], references: [id])
+
+  @@index([refType, refId])
+  @@index([accountId, createdAt])
+}
+
+model Room {
+  id            String    @id @default(uuid())
+  kind          RoomKind
+  currency      Currency
+  game          GameKind
+  stakeAmountNano BigInt
+  maxPlayers    Int
+  status        RoomStatus @default(OPEN)
+  startsAt      DateTime?
+  startMode     String     @default("FILL")
+  cancelAt      DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  // Provably fair
+  serverSeedHash String
+  serverSeed     String? // revealed at settle
+  nonce          Int      @default(0)
+
+  players       RoomPlayer[]
+  settlements   Settlement[]
+}
+
+model RoomPlayer {
+  id         String   @id @default(uuid())
+  roomId     String
+  userId     String
+  clientSeed String
+  joinedAt   DateTime @default(now())
+  betLockedEntryId String?
+
+  room Room @relation(fields: [roomId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([roomId, userId])
+  @@index([roomId, joinedAt])
+}
+
+model Settlement {
+  id        String   @id @default(uuid())
+  roomId    String
+  outcomeJson Json
+  revealClientSeed String
+  revealServerSeed String
+  revealNonce Int
+  settledAt DateTime @default(now())
+  txProof   String?
+
+  room Room @relation(fields: [roomId], references: [id])
+
+  @@unique([roomId])
+}
+
+model PaymentIntent {
+  id          String   @id @default(uuid())
+  userId      String
+  provider    PaymentProvider
+  currency    Currency
+  amountNano  BigInt
+  status      String   @default("PENDING") // PENDING|CONFIRMED|FAILED
+  idempotencyKey String @unique
+  providerRef String?  @unique
+  createdAt   DateTime @default(now())
+  confirmedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
+model Stake {
+  id          String   @id @default(uuid())
+  userId      String
+  amountNano  BigInt
+  lockedAt    DateTime @default(now())
+  unlockAt    DateTime
+  status      String   @default("LOCKED") // LOCKED|UNLOCKED
+  lastRewardAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, status])
+}
